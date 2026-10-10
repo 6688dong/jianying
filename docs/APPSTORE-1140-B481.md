@@ -77,3 +77,17 @@ App Store metadata 证明本机安装来源，不证明旧 build 可以从商店
 代码及公开计划对应提交 `71d54ae`；随后提交只增加验收文档与脱敏记录。
 最终 PR 回复绑定完整 HEAD SHA，并在该 SHA 上重跑测试、源码包检查与已保存草稿回读。
 本节与 JSON 都是贡献者单机报告，尚不能替代维护端复核或承诺其他安装兼容。
+
+
+## 2026-10-10：复审文档与日志补充
+
+[四步脱敏 JSON 日志](evidence/public-bbb-b481-run-logs.json) 保留 10 月 2 日实际 doctor、
+build、verify-build、publish 的输出，个人绝对路径替换为 `<REPO_ROOT>` 与 `<DRAFT_ROOT>`。
+此公开案例 publish 的 `os_managed_attribute_changes` 为 `[]`，
+`security_attributes_preserved` 为 `true`，即这一轮没有使用系统新增属性例外；
+不公开任何属性原值。此前合成案例的受限 provenance 例外仍保留原边界。
+
+本次仅补文档与隔离替身测试，没有变更引擎、桥接构建器或 Skill 入口，也没有重新登记草稿。
+运行时选择的期望改用 manifest 与字面值，真实工具链 inspect 交叉拒绝另一配置的 linker。
+维护者 10 月 4 日静态复核已接受本轮声音证据口径，不再要求人工补听；这不表示已经完成
+主观听音评价或维护端原生复核。

@@ -67,10 +67,10 @@ Windows 云端使用本仓库公开 IG 案例验证了完整解码、帧数与�
 
 ## 运行环境
 
-- Apple Silicon Mac，macOS 26.0+；另有仅在 macOS 15.6.1 验收的剪映 11.4.0 build 481 草稿配置。
+- Apple Silicon Mac，macOS 26.0+；另有贡献者在单台 macOS 15.6.1 机器上报告验收的剪映 11.4.0 build 481 草稿配置，维护端尚未复核。
 - 剪映专业版 11.5.0、11.4.2，或精确匹配 App Store 11.4.0 build 481 的安装。
 - Python 3.9+、FFmpeg / ffprobe、Xcode Command Line Tools。
-- 已验证桥接工具链：11.5.0／11.4.2 为 Apple clang 21.0.0 / SDK 26.5；build 481 为 Apple clang 17.0.0 / SDK 26.1。
+- 维护环境已验证桥接工具链：11.5.0／11.4.2 为 Apple clang 21.0.0 / SDK 26.5；build 481 的 Apple clang 17.0.0 / SDK 26.1 为贡献者单机重建报告，维护端尚未复核。
 
 应用版本、build、官方库哈希、签名与开发者身份均有检查。
 未知版本或不匹配组件会被拒绝，不通过放宽校验强行运行。干净机器安装验收尚未完成。

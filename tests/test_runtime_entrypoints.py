@@ -16,8 +16,27 @@ sys.path[:0] = [str(ROOT / 'engine'), str(ROOT / 'tools')]
 import headless_runtime as runtime
 import runtime_profiles as profiles
 import build_native_codec as builder
+import build_toolchain as toolchain
 import native_edit as edit
 import native_export as export
+
+
+# 独立于运行时配置表的审核期望；旧组件来源由固定源码 manifest 交叉验证。
+MANIFEST = json.loads((ROOT / 'bridge/SOURCE_MANIFEST.json').read_text())
+LEGACY_EXPECTED = {
+    'filename': 'jy14_codec_hardened_11_4',
+    'sha256': MANIFEST['expected_codec_sha256'],
+    'toolchain': {key: MANIFEST['reproduction_environment'][key]
+                  for key in ('compiler', 'macos_sdk', 'binary_minimum_macos')},
+}
+LEGACY_EXPECTED['toolchain']['linker'] = '1267'
+EXPECTED = {key: LEGACY_EXPECTED for key in ('11.5.0', '11.4.2', '11.4.0')}
+EXPECTED['11.4.0-b481'] = {
+    'filename': 'jy14_codec_hardened_11_4_b481',
+    'sha256': '1fe5819a5bd95051d9adecc9d19ad15ff1e62d8529028307035f181a576ec663',
+    'toolchain': {'compiler': 'Apple clang 17.0.0 (clang-1700.4.4.1)',
+                  'macos_sdk': '26.1', 'binary_minimum_macos': '15.0', 'linker': '1230.1'},
+}
 
 
 @contextmanager
@@ -36,7 +55,7 @@ def fixture(profile):
         (bridge / 'SOURCE_MANIFEST.json').write_text(json.dumps(manifest))
         for name in manifest['source_files']:
             (bridge / name).write_bytes(b'fixture')
-        codec = profiles.CODEC_PROFILES[profile]
+        codec = EXPECTED[profile]
         (bridge / codec['filename']).write_bytes(b'fixture')
         (bridge / codec['filename']).chmod(0o700)
         def digest(path):
@@ -62,8 +81,30 @@ def fixture(profile):
 
 
 class RuntimeEntryTests(unittest.TestCase):
+    def test_legacy_expected_hash_matches_independent_runtime_pin(self):
+        self.assertEqual(LEGACY_EXPECTED['sha256'], runtime.PINS['jy14_codec_hardened_11_4'])
+
+    def test_actual_toolchain_selection_rejects_cross_profile_linkers(self):
+        for profile, wrong_linker in (('11.4.0-b481', '1267'), ('11.5.0', '1230.1')):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                expected = EXPECTED[profile]['toolchain']
+                def response(command, env):
+                    if 'clang++' in command:
+                        return expected['compiler'].replace('Apple clang ', 'Apple clang version ', 1)
+                    if '--show-sdk-path' in command:
+                        return str(root)
+                    if '--show-sdk-version' in command:
+                        return expected['macos_sdk']
+                    return json.dumps({'version': wrong_linker})
+                # 保留真正的 select_toolchain -> inspect，只替换系统探测命令和候选目录。
+                with patch.object(toolchain, 'candidates', return_value=[root]), \
+                        patch.object(toolchain, 'run', side_effect=response), \
+                        self.assertRaisesRegex(ValueError, 'No exact reviewed toolchain'):
+                    toolchain.select_toolchain(profiles.CODEC_PROFILES[profile]['toolchain'])
+
     def test_doctor_and_helper_select_exact_components_for_all_profiles(self):
-        for profile in profiles.PROFILES:
+        for profile in EXPECTED:
             with self.subTest(profile=profile), fixture(profile) as (_, _, bridge, codec):
                 result = runtime.doctor()
                 self.assertEqual(result['codec_filename'], codec['filename'])
@@ -110,7 +151,7 @@ class RuntimeEntryTests(unittest.TestCase):
             loader.assert_not_called()
 
     def test_builder_selects_profile_toolchain_without_compiling(self):
-        for profile in profiles.PROFILES:
+        for profile in EXPECTED:
             with self.subTest(profile=profile), fixture(profile) as (_, _, _, codec), \
                     patch.object(builder, 'select_toolchain', return_value=({}, {})) as select, \
                     patch.object(builder, 'run') as process, redirect_stdout(io.StringIO()):
@@ -128,7 +169,7 @@ class RuntimeEntryTests(unittest.TestCase):
             self.assertTrue(all(call.args[0][0] == '/usr/bin/codesign' for call in process.call_args_list))
 
     def test_builder_rebuild_uses_exact_filename_and_fingerprint(self):
-        for profile in profiles.PROFILES:
+        for profile in EXPECTED:
             with self.subTest(profile=profile), fixture(profile) as (root, _, bridge, codec):
                 command = ['fake-clang', str(root / 'unused')]
                 def compile_args(source, frameworks, output, toolchain):
