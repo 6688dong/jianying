@@ -172,6 +172,7 @@ class SavedProvenanceTests(unittest.TestCase):
 
 class PublishRecoveryTests(unittest.TestCase):
     def setUp(self):
+        self.real_copy_xattrs = j.copy_xattrs
         work = ROOT / 'work/issue-hardening-tests'
         work.mkdir(parents=True, exist_ok=True)
         self.folder = Path(tempfile.mkdtemp(prefix='case-', dir=work))
@@ -232,6 +233,24 @@ class PublishRecoveryTests(unittest.TestCase):
         self.assertEqual(self.publish('again', True)['status'], 'already_registered')
         self.assertEqual(j.read_json(self.root / 'root_meta_info.json'), after)
 
+    def test_dual_attribute_addition_preserves_original_index_and_stops_before_placement(self):
+        source = {'com.apple.quarantine': b'synthetic-quarantine'}
+        copied = dict(source, **{'com.apple.macl': b'synthetic-macl',
+                                 'com.apple.provenance': b'synthetic-provenance'})
+        original_bytes = (self.root / 'root_meta_info.json').read_bytes()
+        with patch.object(j, 'copy_xattrs', side_effect=self.real_copy_xattrs), \
+                patch.object(j, 'read_xattrs', side_effect=[source, copied]), \
+                patch.object(j.subprocess, 'run'):
+            with self.assertRaisesRegex(ValueError, 'com.apple.macl, com.apple.provenance'):
+                self.publish('dual-attribute-denied')
+        failure = self.failure('dual-attribute-denied')
+        self.assertEqual(failure['phase'], 'locked')
+        self.assertFalse(failure['index_replaced'])
+        self.assertFalse(failure['files_deleted'])
+        self.assertFalse(self.target.exists())
+        self.assertEqual((self.root / 'root_meta_info.json').read_bytes(), original_bytes)
+        self.assertTrue(Path(failure['temporary_index']).is_file())
+
     def test_user_modified_draft_is_never_resumed(self):
         self.publish('ok')
         j.write(self.target / 'user-change', b'preserve')
@@ -271,6 +290,23 @@ class PublishRecoveryTests(unittest.TestCase):
 
 
 class AttributePolicyTests(unittest.TestCase):
+    def test_dual_attribute_addition_is_not_accepted(self):
+        source = {'com.apple.quarantine': b'synthetic-quarantine'}
+        copied = dict(source, **{'com.apple.macl': b'synthetic-macl',
+                                 'com.apple.provenance': b'synthetic-provenance'})
+        with patch.object(j, 'write'), patch.object(j.subprocess, 'run'), \
+                patch.object(j, 'read_xattrs', return_value=copied):
+            with self.assertRaisesRegex(ValueError, 'com.apple.macl, com.apple.provenance'):
+                j.copy_xattrs(source, Path('/unused'), Path('/audit'))
+
+    def test_provenance_addition_remains_blocked_without_macl(self):
+        source = {'com.apple.quarantine': b'synthetic-quarantine'}
+        copied = dict(source, **{'com.apple.provenance': b'synthetic-provenance'})
+        with patch.object(j, 'write'), patch.object(j.subprocess, 'run'), \
+                patch.object(j, 'read_xattrs', return_value=copied):
+            with self.assertRaisesRegex(ValueError, 'OS provenance attribute disappeared or unexpectedly appeared'):
+                j.copy_xattrs(source, Path('/unused'), Path('/audit'))
+
     def test_macl_and_quarantine_changes_remain_blocked(self):
         for name in ('com.apple.macl', 'com.apple.quarantine'):
             with self.subTest(name=name), patch.object(j, 'write'), patch.object(j.subprocess, 'run'), patch.object(j, 'read_xattrs', return_value={name: b'changed'}):
