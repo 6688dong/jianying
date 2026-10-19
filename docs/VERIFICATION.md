@@ -1,5 +1,33 @@
 # 验证状态
 
+## 2026-10-20：候选分支合入上游 main（`19d9bc70`）后复查
+
+分支 `fix/export-path-and-container` 再次合入上游 `main`（`19d9bc70`：11.6.0 精确配置、#25 的 clonefile
+临时索引修复、Windows FFmpeg CI 固定），**两个修复提交 `6f93137` 与 `9ab0acb` 未改动**，
+`engine/native_export.py` 与 9 月验证时逐字节一致（`git diff b2f32c0 HEAD -- engine/native_export.py` 为空）。
+冲突两处：本日志按时间倒序把上游 10-18 的 11.6.0 小节放在本节之前；技能入口点 `headless_draft.py`
+的固定值改为上游 `native_edit.py`（`7db3c871…`）并保留本分支 `native_export.py`（`7b3470c0…`），
+两者均已与工作区实际字节核对。数据来自同一台 Mac mini、同一官方 11.5.0 安装、同一已验证 build 快照；
+本轮同样不声称其他机器、其他剪映版本或全部路径形态。
+
+| 检查 | 本次结果 |
+| --- | --- |
+| 自动化检查 | `python3 -m unittest discover -s tests` 163 项通过（上游本轮新增用例，总数从 144 增至 163）；导出防护 34 项通过（`JY_NATIVE_EXPORT_TEST_WORK` 指向 `$HOME` 下的目录） |
+| 源码包与固定值 | `python3 tools/check_package.py` 通过：102 文件、语法与固定值一致、未联网 |
+| 7 形态路径矩阵（2 秒 / 30 fps / 832×480，`work/verify-export-paths-merged-main-19d9bc7*`） | 7/7 原生退出码 0，7/7 真实 `ftyp` 为 `isom` 且汇总 TAG `isom;isom` 被接受；重试后 6/7 满足精确帧数（`space` 两次 59/60，见下） |
+| 公开素材真实案例（50.233333 秒 / 30 fps / 540×960，`work/pubcase-merged-19d9bc7-*`、`work/pubcase-merged-retry-hypit-*`） | 4/4 `encoded-and-decoded`、1507/1507 帧（`exact-aligned`）、容器 `isom`、完整解码通过；import 与 Hypit 两个 build 各跑 ASCII 与中文路径 |
+| 11.6.0 的影响面 | 上游只把 `11.6.0` 加进 `PROFILES`/`EDIT_PROFILES`/`RESOURCE_PROFILES`，`EXPORT_PROFILES` 仍为 11.5.0 与 11.4.2，`validate_export_profiles` 未改，本修复的适用范围不变 |
+
+### 本轮未覆盖
+
+- 尾帧竞态未变：`space` 用例两次 59/60（963,944 字节），Hypit 首轮两例 1506/1507、重试后均 1507/1507。
+  这与 9/23 小节登记的 `TEVTEncodeUnit` EOS 竞态同形，修复前后同比例出现，不是本次合并引入；
+  精确帧数判据照旧拒收这类不完整产物，属预期行为。
+- 组合形态（引号 + 反斜杠 + 换行）产物 58,741 字节，与 9/23 记录的黑帧现象一致；本轮只核对帧数与
+  容器，没有逐帧检查画面。
+- 没有在 11.6.0 上跑原生导出：上游明确拒绝该组合（依赖新库内部地址，须先反汇编确认），本机仍是 11.5.0。
+- 没有人工观看画面，没有更换机器或剪映版本，`work/` 下的产物不随仓库分发。
+
 ## 2026-10-18：11.6.0 草稿配置（新建与编辑副本，不含原生导出）
 
 维护端剪映于 10-15 被自动更新到 11.6.0（官方 build 13281）。本节记录新增的精确配置
