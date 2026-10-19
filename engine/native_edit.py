@@ -18,7 +18,7 @@ import time
 import jy14_headless as j
 import native_compound as compound
 import native_fonts as fonts
-from runtime_profiles import validate_timeline_schema, saved_schema_upgrade
+from runtime_profiles import EDIT_PROFILES, validate_timeline_schema, saved_schema_upgrade
 
 SCHEMA = 'jy14-edit-plan/v1'
 BUILD_SCHEMA = 'jy14-edit-build/v1'
@@ -78,6 +78,8 @@ def mirrors(folder, timeline_id):
 
 def load_source(value):
     runtime = j.nd.doctor()
+    j.require(runtime['runtime_profile'] in EDIT_PROFILES,
+              'Existing-draft editing has no reviewed save profile for this runtime')
     helper = j.nd.helper()
     helper._ensure_editor_closed(True)
     source = source_directory(value)
@@ -606,12 +608,18 @@ def normalize_saved_companions(expected, actual, runtime):
     return compound.normalize_companion_ids(expected, actual, nested_root=reviewed_root)
 
 
+# Same-version re-saves observed to restamp device fields: runtime -> (schema, app version).
+SAVED_PROVENANCE = {'jy14-headless-macos-11.5.0': ('187.0.0', '11.5.0'),
+                    'jy14-headless-macos-11.6.0': ('189.0.0', '11.6.0')}
+
+
 def normalize_saved_provenance(before, after, runtime):
     old = before.get('last_modified_platform', {})
     new = after.get('last_modified_platform', {})
-    if not (runtime == 'jy14-headless-macos-11.5.0'
-            and before.get('new_version') == after.get('new_version') == '187.0.0'
-            and old.get('app_version') == new.get('app_version') == '11.5.0'):
+    schema, app_version = SAVED_PROVENANCE.get(runtime, (None, None))
+    if not (schema is not None
+            and before.get('new_version') == after.get('new_version') == schema
+            and old.get('app_version') == new.get('app_version') == app_version):
         return []
     changed = []
     for key in ('device_id', 'hard_disk_id', 'mac_address'):
