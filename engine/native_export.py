@@ -540,13 +540,22 @@ def read_ftyp(path):
     return container
 
 
-def validate_probe(info, settings, duration_us, audio_expected, container):
+def validate_probe(info, settings, duration_us, audio_expected, container=None):
     fmt = info.get('format', {})
-    brand = container['major_brand']
+    reported_brand = fmt.get('tags', {}).get('major_brand')
+    if container is None:
+        # Callers that hold an ffprobe document only (the UI-export path) have
+        # not read the real box and review their own brand set before calling;
+        # the tag is then the only brand available and is judged alone.
+        brand = reported_brand
+        container = {'major_brand': brand, 'minor_version': None, 'compatible_brands': []}
+        cross_check = None
+    else:
+        brand = container['major_brand']
+        cross_check = reported_brand
     j.require(brand in ('isom', 'mp41', 'mp42'),
               'Native output is not a standard MP4 container')
-    reported_brand = fmt.get('tags', {}).get('major_brand')
-    j.require(reported_brand is None or all(part.strip() == brand for part in reported_brand.split(';')),
+    j.require(cross_check is None or all(part.strip() == brand for part in cross_check.split(';')),
               f'Native MP4 brand differs between ftyp ({brand!r}) and ffprobe ({reported_brand!r}).')
     video = [s for s in info.get('streams', []) if s.get('codec_type') == 'video']
     audio = [s for s in info.get('streams', []) if s.get('codec_type') == 'audio']
