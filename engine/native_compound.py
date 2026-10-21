@@ -157,7 +157,8 @@ def check_order(expected, actual):
                       'Nested segment order/count changed')
 
 
-def normalize_companion_ids(expected, actual, nested_root=False, added_buckets=frozenset()):
+def normalize_companion_ids(expected, actual, nested_root=False, added_buckets=frozenset(),
+                            silent_visual_types=frozenset(('photo',))):
     """Match only empty photo audio-companion nodes recreated by native save.
 
     Original and replacement nodes must be uniquely referenced, same kind, and
@@ -169,6 +170,8 @@ def normalize_companion_ids(expected, actual, nested_root=False, added_buckets=f
     new, uniquely referenced and entirely default-valued, and removing them must
     make the segment's remaining reference list line up with the expected one.
     Callers without observed evidence for that runtime leave this set empty.
+    Silent GIF companions are admitted only by a caller with observed save evidence;
+    the default remains photo-only for existing compound and 11.5 callers.
     """
     actual_rows = {timeline['id']: timeline for _, timeline in graph(actual)}
     replacements, changes, dropped = {}, [], []
@@ -190,7 +193,7 @@ def normalize_companion_ids(expected, actual, nested_root=False, added_buckets=f
         new_segments = {s['id']: s for t in got.get('tracks', []) for s in t.get('segments', [])}
         for old_segment in old_segments:
             material = old_index.get(old_segment.get('material_id'), ('', {}))[1]
-            if material.get('type') != 'photo' or material.get('has_audio') is not False:
+            if material.get('type') not in silent_visual_types or material.get('has_audio') is not False:
                 continue
             new_segment = new_segments.get(old_segment['id'], {})
             old_refs, new_refs = old_segment.get('extra_material_refs', []), new_segment.get('extra_material_refs', [])
@@ -199,7 +202,8 @@ def normalize_companion_ids(expected, actual, nested_root=False, added_buckets=f
             # a renamed companion is never mistaken for a new one.
             added = [] if len(new_refs) <= len(old_refs) else [
                 ref for ref in new_refs
-                if ref not in old_index and new_index.get(ref, ('', {}))[0] in added_buckets
+                if material.get('type') == 'photo'
+                and ref not in old_index and new_index.get(ref, ('', {}))[0] in added_buckets
                 and default_node(*new_index[ref])
                 and sum(ref in s.get('extra_material_refs', []) for s in new_segments.values()) == 1]
             kept = [ref for ref in new_refs if ref not in added]

@@ -23,7 +23,7 @@ python3 /absolute/path/to/yichen-jianying-edit/scripts/headless_draft.py doctor
 ## 运行前提
 
 Apple Silicon macOS、Python 3.9+、FFmpeg / ffprobe、Xcode 编译工具，以及匹配版本的
-原版剪映。11.5.0 为主版本，11.4.2 为兼容版本，两者支持草稿和原生导出；
+原版剪映。11.6.0 为主版本，11.5.0 / 11.4.2 为兼容版本，均支持草稿和原生导出；
 11.4.0 仅保留历史草稿配置。导出快照必须与当前运行版本一致。
 精确工具链和哈希限制见核心项目说明；这不是任意 Mac/任意剪映版本的兼容承诺。
 

@@ -41,6 +41,15 @@ class ExportGuards(unittest.TestCase):
                                    'r_frame_rate': '25/1', 'nb_frames': '150'},
                                   {'codec_type': 'audio', 'codec_name': 'aac'}]}
 
+    def test_encoder_completion_does_not_hide_shader_failure(self):
+        for error in ('Create RenderPipeline Failed!',
+                      'RendererMetalV2::createPipeline() failed: program_source:36:19',
+                      '[AGFX] crossShaderFromGL failed'):
+            with self.subTest(error=error), self.assertRaisesRegex(ValueError, 'Native renderer failed'):
+                e.validate_render_log(error + '\nJY_NATIVE_EXPORT_DONE\n')
+        report = e.validate_render_log('CrossShader cache miss\nJY_NATIVE_EXPORT_DONE\n')
+        self.assertFalse(report['fatal_shader_errors_found'])
+
     def timeline_fixture(self, materials=None, **fields):
         """A reviewed 11.5 timeline envelope for staging-only resource fixtures."""
         timeline = deepcopy(e.j.blueprint()['timeline'])

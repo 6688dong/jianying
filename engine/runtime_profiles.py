@@ -1,5 +1,5 @@
 """Reviewed application identities; never infer compatibility from a version prefix."""
-PRIMARY_VERSION = '11.5.0'
+PRIMARY_VERSION = '11.6.0'
 PROFILE_PREFIX = 'jy14-headless-macos-'
 PROFILES = {
     '11.6.0': 'a490d9a08b71a2d9af138d24528d3d40d65b37b06911627c53a2915c6cac0754',
@@ -7,10 +7,10 @@ PROFILES = {
     '11.4.2': '632c8ddd09ff4a54f876cd8142eb505055ee26d944199506b230949b7e106bd1',
     '11.4.0': 'a1693070036a6678bb5db35f71d2105812ad24a2370e7e91c78712cc0d6455f3',
 }
-EXPORT_PROFILES = frozenset(PROFILE_PREFIX + v for v in ('11.5.0', '11.4.2'))
+EXPORT_PROFILES = frozenset(PROFILE_PREFIX + v for v in ('11.6.0', '11.5.0', '11.4.2'))
 # Deliverables rendered by the editor's own export dialog. This is a separate
-# evidence tier from EXPORT_PROFILES above: it needs no export ABI, proves
-# nothing about one, and its acceptance never carries over to that path.
+# evidence tier from EXPORT_PROFILES above. A runtime may support both paths,
+# but UI acceptance never substitutes for headless ABI and render acceptance.
 UI_EXPORT_PROFILES = frozenset((PROFILE_PREFIX + '11.6.0',))
 # Captured draft resources are reviewed per runtime in the UI, independently of export ABIs.
 RESOURCE_PROFILES = frozenset(PROFILE_PREFIX + v for v in ('11.6.0', '11.5.0', '11.4.2'))
