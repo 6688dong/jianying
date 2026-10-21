@@ -514,6 +514,15 @@ def validate_probe(info, settings, duration_us, audio_expected):
             'major_brand': fmt['tags']['major_brand']}
 
 
+def validate_render_log(log):
+    """Reject known fatal shader failures even if the encoder finishes a black MP4."""
+    fatal = ('Create RenderPipeline Failed', '::createPipeline() failed:',
+             '[AGFX] crossShaderFromGL failed')
+    errors = [line[:1000] for line in log.splitlines() if any(marker in line for marker in fatal)]
+    j.require(not errors, 'Native renderer failed: ' + (errors[0] if errors else ''))
+    return {'fatal_shader_errors_found': False, 'checked_markers': list(fatal)}
+
+
 def run(build, out, bitrate=4_000_000, timeout=600):
     build, record, timeline = verified_build(build)
     capabilities = supported_features(timeline)
@@ -567,6 +576,9 @@ def run(build, out, bitrate=4_000_000, timeout=600):
                 'root': str(root), 'from_signed_app_bundle': True, 'account_data_used': False,
                 'config_sha256': j.nd.digest(root / 'config.json'),
                 'javascript_sha256': j.nd.digest(root / 'js/video/video.js')}
+        if runtime['runtime_profile'] == 'jy14-headless-macos-11.6.0':
+            evidence['native_effect_renderer'] = 'native OpenGL (isolated process only)'
+            evidence['renderer_library_sha256'] = j.nd.digest(frameworks / 'libcccreator.dylib')
         with (job / 'native.stdout.log').open('xb') as stdout, (job / 'native.stderr.log').open('xb') as stderr:
             os.chmod(stdout.name, 0o600); os.chmod(stderr.name, 0o600)
             try:
@@ -574,10 +586,12 @@ def run(build, out, bitrate=4_000_000, timeout=600):
             except subprocess.TimeoutExpired as error:
                 raise ValueError('Native export timed out; partial output retained') from error
         evidence['native_returncode'] = result.returncode
-        evidence['native_completion_event'] = 'JY_NATIVE_EXPORT_DONE' in (job / 'native.stdout.log').read_text()
+        native_log = (job / 'native.stdout.log').read_text()
+        evidence['native_completion_event'] = 'JY_NATIVE_EXPORT_DONE' in native_log
         evidence['native_restore_completion_event'] = 'JY_NATIVE_RESTORE_DONE' in (job / 'native.stderr.log').read_text()
         j.require(result.returncode == 0 and evidence['native_completion_event'] and evidence['native_restore_completion_event'],
                   'Native restoration/export did not complete successfully')
+        evidence['native_render_log_check'] = validate_render_log(native_log)
         probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-show_streams', '-show_format',
                                                     '-of', 'json', str(output)], timeout=60))
         j.write(job / 'ffprobe.json', probe)

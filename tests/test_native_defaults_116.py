@@ -171,6 +171,33 @@ class PhotoCompanionTests(unittest.TestCase):
         self.assertTrue(all('expected_id' in row for row in rows))
         edit.preserved(expected, compared)
 
+    def test_saved_187_silent_gif_companions_upgrade_only_on_116(self):
+        expected, actual = photo_pair(add_loudness=False)
+        expected['new_version'] = '187.0.0'
+        expected['last_modified_platform']['app_version'] = '11.5.0'
+        for timeline in (expected, actual):
+            timeline['materials']['videos'][0]['type'] = 'gif'
+        before, after = deepcopy(expected), deepcopy(actual)
+        compared, rows = edit.normalize_saved_companions(expected, actual, PROFILE)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(compared['tracks'], expected['tracks'])
+        self.assertEqual((expected, actual), (before, after))
+        for runtime, has_audio in ((PROFILE_115, False), (PROFILE, True)):
+            for timeline in (expected, actual):
+                timeline['materials']['videos'][0]['has_audio'] = has_audio
+            compared, rows = edit.normalize_saved_companions(expected, actual, runtime)
+            self.assertEqual(rows, [])
+            self.assertNotEqual(compared['tracks'], expected['tracks'])
+
+    def test_gif_migration_does_not_admit_unobserved_companion_additions(self):
+        expected, actual = photo_pair()
+        for timeline in (expected, actual):
+            timeline['materials']['videos'][0]['type'] = 'gif'
+        compared, rows = edit.normalize_saved_companions(expected, actual, PROFILE)
+        self.assertFalse(any('added_native_id' in row for row in rows))
+        with self.assertRaises(ValueError):
+            edit.preserved(expected, compared)
+
     def test_each_observed_change_also_passes_on_its_own(self):
         for add_loudness, rename_vocal in ((True, False), (False, True)):
             expected, actual = photo_pair(add_loudness=add_loudness, rename_vocal=rename_vocal)

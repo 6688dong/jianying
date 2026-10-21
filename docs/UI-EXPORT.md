@@ -1,13 +1,13 @@
 # UI export acceptance
 
-Jianying 11.6.0 has no reviewed headless export ABI, so `export` refuses before
-it reads a build. This path exists so a finished file can still be delivered on
-that runtime: the **editor's own export dialog** renders, and `ui-export`
-checks the result. It renders nothing itself.
+On Jianying 11.6.0, the **editor's own export dialog** renders and `ui-export`
+checks the result. It renders nothing itself. The reviewed headless `export`
+path is also available as of 2026-10-21; it renders a frozen build without opening
+the live draft. Choose UI export when that workflow is specifically required.
 
-This is a **separate evidence tier** from the headless native exporter. Neither
-one's acceptance carries over to the other, and nothing here relaxes a gate on
-that path — `EXPORT_PROFILES` and its container brands are untouched.
+These paths have separate evidence and container checks. UI acceptance does not
+substitute for headless ABI, visual or audio acceptance. UI export modifies the
+opened draft, while headless export leaves the live draft untouched.
 
 ## Commands
 
@@ -95,6 +95,6 @@ python3 -m unittest discover -s tests -p test_ui_export.py -v
 Ten cases cover the accepted and refused container brands, that the headless
 brand set is not widened, the inherited exact frame-count policy, canvas/rate/
 codec/missing-audio strictness, probe immutability, the registered runtime set
-being 11.6.0 only and disjoint from `EXPORT_PROFILES`, and the draft-change
+being 11.6.0 only while also belonging to `EXPORT_PROFILES`, and the draft-change
 report. Offline passes establish nothing about a real export; the acceptance is
 in [VERIFICATION.md](VERIFICATION.md).

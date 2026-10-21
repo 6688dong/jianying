@@ -611,11 +611,16 @@ def normalize_saved_companions(expected, actual, runtime):
     # and 189 sources; the added-companion tolerance stays off for 11.5.0, which
     # was not retested here.
     added_buckets = frozenset()
+    silent_visual_types = frozenset(('photo',))
     if (runtime == 'jy14-headless-macos-11.6.0' and actual.get('new_version') == '189.0.0'
             and actual.get('last_modified_platform', {}).get('app_version') == '11.6.0'):
         reviewed_root, added_buckets = True, frozenset(('loudnesses',))
+        # 2026-10-21: a saved 187 photo/GIF project upgrades to 189 and
+        # regenerates both empty audio companions on its silent GIF as well.
+        silent_visual_types = frozenset(('photo', 'gif'))
     return compound.normalize_companion_ids(expected, actual, nested_root=reviewed_root,
-                                            added_buckets=added_buckets)
+                                            added_buckets=added_buckets,
+                                            silent_visual_types=silent_visual_types)
 
 
 # Same-version re-saves observed to restamp device fields: runtime -> (schema, app version).

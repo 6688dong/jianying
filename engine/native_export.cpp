@@ -1,4 +1,4 @@
-// Process-isolated adapters for exact signed Jianying 11.5.0 and 11.4.2 engines.
+// Process-isolated adapters for exact signed Jianying 11.6.0, 11.5.0 and 11.4.2 engines.
 // No UI attachment, account session, network, or modifications to the app.
 #include <CommonCrypto/CommonDigest.h>
 #include <atomic>
@@ -97,6 +97,9 @@ struct NativeAbi {
 // 11.4.2 constants are retained. Each new row requires disassembly and native
 // fixture validation; a matching marketing version alone is never sufficient.
 static const NativeAbi abi_profiles[] = {
+  {"11.6.0", "a490d9a08b71a2d9af138d24528d3d40d65b37b06911627c53a2915c6cac0754",
+   0x22316ec, 0x2830110, 0x3d8, 0x7e8, 669,
+   "[draft_service.cpp:operator():669][LYRA] [LYRA] DraftService::restoreDraft driverRun, callback !"},
   {"11.5.0", "2041482a1aaeffa4d8bd69b836f8cf38807aaad8021bca410d567c59af3bccfa",
    0x21b86dc, 0x274b018, 0x3d8, 0x7e8, 669,
    "[draft_service.cpp:operator():669][LYRA] [LYRA] DraftService::restoreDraft driverRun, callback !"},
@@ -130,11 +133,9 @@ static void nativeLog(const char*, const char* file, int line, const char* funct
                file ? file : "", line, function ? function : "", rendered);
 }
 
-static char* pinnedEngineBase() {
-  Dl_info info{};
-  if (!dladdr(reinterpret_cast<void*>(&lyra::Server::instance), &info)) return nullptr;
-  std::ifstream input(info.dli_fname, std::ios::binary);
-  if (!input) return nullptr;
+static std::string fileSha256(const char* filename) {
+  std::ifstream input(filename, std::ios::binary);
+  if (!input) return {};
   CC_SHA256_CTX state;
   CC_SHA256_Init(&state);
   char data[65536];
@@ -149,7 +150,14 @@ static char* pinnedEngineBase() {
     hash += "0123456789abcdef"[byte >> 4];
     hash += "0123456789abcdef"[byte & 15];
   }
-  if (input.bad()) return nullptr;
+  if (input.bad()) return {};
+  return hash;
+}
+
+static char* pinnedEngineBase() {
+  Dl_info info{};
+  if (!dladdr(reinterpret_cast<void*>(&lyra::Server::instance), &info)) return nullptr;
+  const auto hash = fileSha256(info.dli_fname);
   for (const auto& profile : abi_profiles) {
     if (hash == profile.sha256) {
       active_abi = &profile;
@@ -180,7 +188,8 @@ static void configureCapturedMasks(const std::shared_ptr<void>& wrapper) {
   auto adapter = static_cast<lyra::wrapper::VeWrapper*>(wrapper.get())->getVeAdapterConfig();
   if (!adapter) throw std::runtime_error("native adapter configuration missing");
   // addVideo reads this hub in both reviewed libraries: 11.4.2 0x3c97268,
-  // 11.5.0 0x3d7a708 (field access at 0x3d7aacc).
+  // 11.5.0 0x3d7a708 (field access at 0x3d7aacc),
+  // 11.6.0 0x3e10f98 (field access at 0x3e11e2c).
   if (!active_abi) throw std::runtime_error("native ABI was not selected");
   auto& hub = *reinterpret_cast<std::string*>(reinterpret_cast<char*>(adapter.get()) + active_abi->mask_hub);
   if (!hub.empty()) throw std::runtime_error("unexpected native default effect resource path");
@@ -224,6 +233,20 @@ int main(int argc, char** argv) {
     alarm(timeout + 15);
     lvve::Logger::getLogger()->setAlogFunction(nativeLog, nullptr);
     lvve::Logger::getLogger()->setLogLevel("debug");
+    if (std::strcmp(active_abi->version, "11.6.0") == 0) {
+      auto set_metal = reinterpret_cast<void (*)(bool)>(dlsym(RTLD_DEFAULT, "_ZN13AmazingEngine12SwingManager19setMetalEnableOnMacEb"));
+      if (!set_metal) throw std::runtime_error("native renderer configuration unavailable");
+      // 11.6 SwingManager reads the process-local backend flag at 0x17dd0c4;
+      // its exported setter at 0x17e0d8c stores the single boolean. The default
+      // Metal path emits invalid MSL for mask and picture-in-picture shaders on this runtime.
+      // Keep the original resource bytes and select its native OpenGL path.
+      Dl_info renderer{};
+      if (!dladdr(reinterpret_cast<void*>(set_metal), &renderer) ||
+          fileSha256(renderer.dli_fname) != "647a371eaea6a9a706c58e9177e877be4068be37ff6cda3aaaa226c743d306b6")
+        throw std::runtime_error("native renderer library differs from reviewed build");
+      set_metal(false);
+      std::cerr << "JY_NATIVE_RENDERER OpenGL\n";
+    }
     auto& server = lyra::Server::instance();
     server.startup(nullptr, [](const std::function<void()>& f) { if (f) f(); });
     long sid = server.openSession(nullptr, "isolated-local-export");
@@ -274,7 +297,8 @@ int main(int argc, char** argv) {
     request->tid = tid;
     *reinterpret_cast<std::string*>(reinterpret_cast<char*>(storage) + 0x48) = output.string();
     auto config = reinterpret_cast<char*>(storage) + 0x60;
-    // ToVeCompileSetting: 11.4.2 0x3b7805c; 11.5.0 0x3c59708.
+    // ToVeCompileSetting: 11.4.2 0x3b7805c; 11.5.0 0x3c59708;
+    // 11.6.0 0x3d7e118. The checked field offsets are shared by these builds.
     std::memcpy(config + 0x3f, &width, sizeof(width));
     std::memcpy(config + 0x43, &height, sizeof(height));
     config[0x47] = 0;  // Native hardware-encode preference, not an encoder guarantee.

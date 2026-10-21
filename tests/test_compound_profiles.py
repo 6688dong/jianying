@@ -51,12 +51,12 @@ class StillRefusedTests(unittest.TestCase):
     def test_a_plain_timeline_is_still_publishable(self):
         compound.require_publishable({'id': 'root', 'duration': 1000, 'materials': {}, 'tracks': []})
 
-    def test_adding_compound_runtimes_did_not_add_an_export_runtime(self):
-        # 11.6.0 can build compound structures but has no headless export ABI,
-        # so the frozen-snapshot delivery stays unavailable there.
-        self.assertNotIn(PREFIX + '11.6.0', profiles.EXPORT_PROFILES)
+    def test_frozen_export_has_independent_reviewed_runtime(self):
+        # 11.6.0 now has separate native-render acceptance. This does not
+        # unlock home registration or editable persistence.
+        self.assertIn(PREFIX + '11.6.0', profiles.EXPORT_PROFILES)
         self.assertEqual(profiles.EXPORT_PROFILES,
-                         frozenset(PREFIX + v for v in ('11.5.0', '11.4.2')))
+                         frozenset(PREFIX + v for v in ('11.6.0', '11.5.0', '11.4.2')))
 
 
 if __name__ == '__main__':
